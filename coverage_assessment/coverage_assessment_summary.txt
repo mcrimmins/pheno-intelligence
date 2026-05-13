@@ -1,0 +1,57 @@
+Coverage Assessment Summary
+==========================
+
+Generated on: 2026-05-13 18:14:19
+
+Total combinations analyzed: 8232
+Total observations: 231173
+
+Reliability Tier Distribution:
+reliability_tier
+insufficient    8232
+
+Top 20 Best-Covered Combinations (by coverage_fraction):
+ species_id   common_name                 phenophase_description state  coverage_fraction
+          1 bigleaf maple &gt;=75% of full leaf size (deciduous)    CA                1.0
+          1 bigleaf maple &gt;=75% of full leaf size (deciduous)    OR                1.0
+          1 bigleaf maple &gt;=75% of full leaf size (deciduous)    WA                1.0
+          1 bigleaf maple &gt;=50% of leaves colored (deciduous)    CA                1.0
+          1 bigleaf maple &gt;=50% of leaves colored (deciduous)    OR                1.0
+          1 bigleaf maple &gt;=50% of leaves colored (deciduous)    WA                1.0
+          1 bigleaf maple         All leaves colored (deciduous)    CA                1.0
+          1 bigleaf maple         All leaves colored (deciduous)    OR                1.0
+          1 bigleaf maple         All leaves colored (deciduous)    WA                1.0
+          1 bigleaf maple  &gt;=50% of leaves fallen (deciduous)    CA                1.0
+          1 bigleaf maple  &gt;=50% of leaves fallen (deciduous)    OR                1.0
+          1 bigleaf maple  &gt;=50% of leaves fallen (deciduous)    WA                1.0
+          1 bigleaf maple          All leaves fallen (deciduous)    CA                1.0
+          1 bigleaf maple          All leaves fallen (deciduous)    OR                1.0
+          1 bigleaf maple          All leaves fallen (deciduous)    WA                1.0
+          1 bigleaf maple                   Full flowering (50%)    CA                1.0
+          1 bigleaf maple                   Full flowering (50%)    OR                1.0
+          1 bigleaf maple                   Full flowering (50%)    WA                1.0
+          1 bigleaf maple                     Breaking leaf buds    CA                1.0
+          1 bigleaf maple                     Breaking leaf buds    OR                1.0
+
+Top 20 Sparse Combinations (by years_missing):
+ species_id          common_name                       phenophase_description state  years_missing
+        136    needle and thread                         Ripe seeds (grasses)    WY              1
+        136    needle and thread                             Leaves (grasses)    WY              1
+        136    needle and thread              Initial growth (grasses/sedges)    WY              1
+        136    needle and thread                Open flowers (grasses/sedges)    WY              1
+        182 purple passionflower All leaves withered (herbaceous and grasses)    NC              1
+        182 purple passionflower                    Open flowers (1 location)    NC              1
+        182 purple passionflower                     Ripe fruits (1 location)    NC              1
+        182 purple passionflower                       Initial growth (forbs)    NC              1
+        182 purple passionflower                               Leaves (forbs)    NC              1
+          1        bigleaf maple       &gt;=75% of full leaf size (deciduous)    CA              0
+          1        bigleaf maple       &gt;=75% of full leaf size (deciduous)    OR              0
+          1        bigleaf maple       &gt;=75% of full leaf size (deciduous)    WA              0
+          1        bigleaf maple       &gt;=50% of leaves colored (deciduous)    CA              0
+          1        bigleaf maple       &gt;=50% of leaves colored (deciduous)    OR              0
+          1        bigleaf maple       &gt;=50% of leaves colored (deciduous)    WA              0
+          1        bigleaf maple               All leaves colored (deciduous)    CA              0
+          1        bigleaf maple               All leaves colored (deciduous)    OR              0
+          1        bigleaf maple               All leaves colored (deciduous)    WA              0
+          1        bigleaf maple        &gt;=50% of leaves fallen (deciduous)    CA              0
+          1        bigleaf maple        &gt;=50% of leaves fallen (deciduous)    OR              0

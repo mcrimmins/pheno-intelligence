@@ -1,0 +1,533 @@
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import numpy as np
+from pathlib import Path
+import warnings
+try:
+    from scipy.stats import linregress
+    HAS_SCIPY = True
+except ImportError:
+    HAS_SCIPY = False
+    def linregress(x, y):
+        # Fallback using numpy.polyfit
+        coeffs = np.polyfit(x, y, 1)
+        slope = coeffs[0]
+        intercept = coeffs[1]
+        # R-squared calculation (simplified)
+        y_pred = np.polyval(coeffs, x)
+        ss_res = np.sum((y - y_pred) ** 2)
+        ss_tot = np.sum((y - np.mean(y)) ** 2)
+        r_squared = 1 - (ss_res / ss_tot) if ss_tot != 0 else 0
+        # For p-value, we'll return None or a stub since it's complex to compute manually
+        p_value = np.nan
+        return type('Result', (), {
+            'slope': slope,
+            'intercept': intercept,
+            'rvalue': np.sqrt(r_squared) if r_squared >= 0 else -np.sqrt(-r_squared),
+            'r_squared': r_squared,
+            'pvalue': p_value
+        })()
+
+# Suppress warnings for cleaner output
+warnings.filterwarnings('ignore')
+
+# Set page configuration
+st.set_page_config(
+    page_title="Phenology Intelligence Dashboard",
+    page_icon="🌿",
+    layout="wide"
+)
+
+# Custom CSS for scientific styling
+st.markdown("""
+<style>
+    .reportview-container .main .block-container {
+        padding-top: 2rem;
+        padding-bottom: 2rem;
+    }
+    .stSelectbox, .stMultiselect, .stSlider {
+        font-size: 14px;
+    }
+    h1 {
+        color: #2c7744;
+    }
+    h2 {
+        color: #2c7744;
+    }
+    h3 {
+        color: #2c7744;
+    }
+    .stDataFrame {
+        font-size: 12px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# Header
+st.title("🌿 Phenology Intelligence Dashboard")
+st.markdown("Interactive exploration of species phenology data")
+
+# Cache data loading functions
+@st.cache_data
+def load_species_phenophase_data():
+    """Load annual species phenophase summary data."""
+    try:
+        df = pd.read_csv('/outputs/phenology-intelligence-v1/annual_summaries/annual_species_phenophase_summary.csv')
+        df['observation_date'] = pd.to_datetime(df['first_observation_date'])
+        df['last_observation_date'] = pd.to_datetime(df['last_observation_date'])
+        return df
+    except Exception as e:
+        st.error(f"Error loading species phenophase data: {e}")
+        return pd.DataFrame()
+
+@st.cache_data
+def load_state_data():
+    """Load annual state summary data."""
+    try:
+        df = pd.read_csv('/outputs/phenology-intelligence-v1/annual_summaries/annual_state_summary.csv')
+        return df
+    except Exception as e:
+        st.error(f"Error loading state data: {e}")
+        return pd.DataFrame()
+
+@st.cache_data
+def load_species_data():
+    """Load annual species summary data."""
+    try:
+        df = pd.read_csv('/outputs/phenology-intelligence-v1/annual_summaries/annual_species_summary.csv')
+        return df
+    except Exception as e:
+        st.error(f"Error loading species data: {e}")
+        return pd.DataFrame()
+
+# Function to compute trends
+@st.cache_data
+def compute_trends(df, min_observations=30, use_weighted=False):
+    """Compute linear trends of median_day_of_year vs year."""
+    if df.empty:
+        return pd.DataFrame()
+    
+    trends = []
+    
+    # Group by species, common_name, and phenophase
+    grouped = df.groupby(['species_id', 'common_name', 'phenophase_description', 'state'])
+    
+    for (species, common_name, phenophase, state), group in grouped:
+        # Filter to exclude years with fewer than min_observations
+        valid_group = group[group['observation_count'] >= min_observations]
+        
+        if len(valid_group) < 5:  # Need at least 5 years for meaningful trend
+            continue
+            
+        # Get unique years and median day of year values
+        years = valid_group['year'].values
+        median_days = valid_group['median_day_of_year'].values
+        observation_counts = valid_group['observation_count'].values
+        
+        # Compute linear trend
+        if HAS_SCIPY:
+            # Use scipy.stats.linregress if available
+            result = linregress(years, median_days)
+            slope = result.slope
+            intercept = result.intercept
+            r_squared = result.rvalue**2
+            # p-value is not reliable for small sample sizes when there are ties in the data
+            p_value = result.pvalue if not np.isnan(result.pvalue) else 0.0 
+        else:
+            # Use numpy polyfit fallback
+            result = linregress(years, median_days)
+            slope = result.slope
+            intercept = result.intercept
+            r_squared = result.r_squared
+            p_value = result.pvalue
+            
+        # Compute weighted trend if requested
+        if use_weighted and len(observation_counts) > 1:
+            # Weight by observation count
+            weights = observation_counts
+            slope_weighted, intercept_weighted = np.polyfit(years, median_days, 1, w=weights)
+            slope = slope_weighted
+        
+        # Calculate slope in days per decade
+        slope_per_decade = slope * 10
+        
+        # Append results
+        trends.append({
+            'species_id': species,
+            'common_name': common_name,
+            'phenophase_description': phenophase,
+            'state': state,
+            'slope_days_per_year': slope,
+            'slope_days_per_decade': slope_per_decade,
+            'intercept': intercept,
+            'r_squared': r_squared,
+            'p_value': p_value,
+            'years_used': len(years),
+            'total_observations': valid_group['observation_count'].sum()
+        })  
+    
+    return pd.DataFrame(trends)
+
+# Generate combined trend result for the current filtered data
+@st.cache_data
+def get_filtered_trend_results(filtered_df, min_observations=30, use_weighted=False):
+    """Compute trends for filtered data."""
+    return compute_trends(filtered_df, min_observations, use_weighted)
+
+# Load all datasets
+species_phenophase_df = load_species_phenophase_data()
+state_df = load_state_data()
+species_df = load_species_data()
+
+# Combine datasets for comprehensive analysis
+if not species_phenophase_df.empty and not state_df.empty:
+    # Create a master dataset by merging the two
+    merged_df = pd.merge(species_phenophase_df, state_df, on=['year', 'state'], how='left')
+else:
+    merged_df = pd.DataFrame()
+
+# Sidebar filters
+st.sidebar.header("Filters")
+
+# Enable spatial maps toggle
+enable_spatial_maps = st.sidebar.checkbox("Enable spatial maps", value=True)
+
+# Get unique values for dropdowns
+if not species_phenophase_df.empty:
+    # Filter for numeric years
+    years = sorted(species_phenophase_df['year'].dropna().unique().astype(int))
+    min_year, max_year = min(years), max(years) if years else (2000, 2020)
+    
+    # Add year range slider
+    year_range = st.sidebar.slider(
+        "Select Year Range",
+        min_value=min_year,
+        max_value=max_year,
+        value=(min_year, max_year),
+        key="year_range"
+    )
+    
+    # Add minimum observations threshold
+    min_observations = st.sidebar.slider(
+        "Minimum Observations Threshold",
+        min_value=1,
+        max_value=100,
+        value=30,
+        key="min_observations"
+    )
+    
+    # Add weighted trend analysis checkbox
+    use_weighted_trends = st.sidebar.checkbox(
+        "Use Weighted Trends (by observation count)",
+        value=False,
+        key="weighted_trends"
+    )
+    
+    # Get unique species names for multiselect
+    species_options = sorted(species_phenophase_df['species_id'].dropna().unique())
+    species_selected = st.sidebar.multiselect(
+        "Select Species",
+        options=species_options,
+        default=species_options[:5] if len(species_options) > 5 else species_options,
+        key="species"
+    )
+    
+    # Get common names
+    common_names = sorted(species_phenophase_df['common_name'].dropna().unique())
+    common_names_selected = st.sidebar.multiselect(
+        "Select Common Names",
+        options=common_names,
+        default=common_names[:5] if len(common_names) > 5 else common_names,
+        key="common_name"
+    )
+    
+    # Get phenophase descriptions
+    phenophase_options = sorted(species_phenophase_df['phenophase_description'].dropna().unique())
+    phenophase_selected = st.sidebar.multiselect(
+        "Select Phenophase Descriptions",
+        options=phenophase_options,
+        default=phenophase_options[:3] if len(phenophase_options) > 3 else phenophase_options,
+        key="phenophase"
+    )
+    
+    # Get states
+    states = sorted(state_df['state'].dropna().unique())
+    states_selected = st.sidebar.multiselect(
+        "Select States",
+        options=states,
+        default=states[:5] if len(states) > 5 else states,
+        key="state"
+    )
+else:
+    year_range = (2000, 2020)
+    species_selected = []
+    common_names_selected = []
+    phenophase_selected = []
+    states_selected = []
+
+# Filter data based on selections
+filtered_df = species_phenophase_df.copy()
+
+if species_selected:
+    filtered_df = filtered_df[filtered_df['species_id'].isin(species_selected)]
+    
+if common_names_selected:
+    filtered_df = filtered_df[filtered_df['common_name'].isin(common_names_selected)]
+
+if phenophase_selected:
+    filtered_df = filtered_df[filtered_df['phenophase_description'].isin(phenophase_selected)]
+
+if states_selected:
+    filtered_df = filtered_df[filtered_df['state'].isin(states_selected)]
+
+# Apply year range filter
+filtered_df = filtered_df[(filtered_df['year'] >= year_range[0]) & (filtered_df['year'] <= year_range[1])]
+
+# Summary metrics
+st.header("📊 Summary Metrics")
+col1, col2, col3, col4 = st.columns(4)
+
+if not filtered_df.empty:
+    total_observations = filtered_df['observation_count'].sum()
+    distinct_species = filtered_df['species_id'].nunique()
+    distinct_states = filtered_df['state'].nunique()
+    min_year_filtered = filtered_df['year'].min()
+    max_year_filtered = filtered_df['year'].max()
+else:
+    total_observations = 0
+    distinct_species = 0
+    distinct_states = 0
+    min_year_filtered = year_range[0]
+    max_year_filtered = year_range[1]
+
+col1.metric("Total Observations", f"{total_observations:,}")
+col2.metric("Distinct Species", f"{distinct_species:,}")
+col3.metric("Distinct States", f"{distinct_states:,}")
+col4.metric("Year Range", f"{min_year_filtered} - {max_year_filtered}")
+
+# Display spatial maps if enabled
+if enable_spatial_maps and not filtered_df.empty:
+    st.header("🗺️ Spatial Distribution Maps")
+    
+    # Create spatial map - simplified version using basic scatter plot
+    # For a full geo-spatial map, additional libraries like folium or plotly with geo features would be needed
+    if 'state' in filtered_df.columns and 'observation_count' in filtered_df.columns:
+        # Group by state for spatial view
+        state_summary = filtered_df.groupby('state')['observation_count'].sum().sort_values(ascending=False).reset_index()
+        
+        # Simple bar chart showing spatial distribution
+        if not state_summary.empty:
+            fig_spatial = px.bar(state_summary, x='state', y='observation_count',
+                               title='Observation Count by State',
+                               height=400)
+            st.plotly_chart(fig_spatial, use_container_width=True)
+        else:
+            st.info("No spatial data available for visualization")
+    else:
+        st.info("Spatial data not available in current dataset")
+
+# Main visualizations
+st.header("📈 Phenology Trends")
+
+# Create subplots
+fig = make_subplots(
+    rows=2, cols=2,
+    subplot_titles=('Median Day of Year Over Time', 'Observations by Year', 'Distribution of Median Day of Year', 'Top States by Observations'),
+    specs=[[{"secondary_y": False}, {"secondary_y": False}],
+           [{"secondary_y": False}, {"secondary_y": False}]]
+)
+
+# Median day of year over time
+if not filtered_df.empty:
+    yearly_medians = filtered_df.groupby('year')['median_day_of_year'].median().reset_index()
+    # For better visualization, we also get the mean
+    yearly_means = filtered_df.groupby('year')['median_day_of_year'].mean().reset_index()
+    
+    fig.add_trace(
+        go.Scatter(x=yearly_medians['year'], y=yearly_medians['median_day_of_year'], 
+                   mode='lines+markers', name='Median'),
+        row=1, col=1
+    )
+    
+    fig.add_trace(
+        go.Scatter(x=yearly_means['year'], y=yearly_means['median_day_of_year'], 
+                   mode='lines', name='Mean', line=dict(dash='dash')),
+        row=1, col=1
+    )
+
+# Observations by year
+if not filtered_df.empty:
+    yearly_counts = filtered_df.groupby('year')['observation_count'].sum().reset_index()
+    
+    fig.add_trace(
+        go.Bar(x=yearly_counts['year'], y=yearly_counts['observation_count'], name='Observations'),
+        row=1, col=2
+    )
+
+# Histogram of median day of year
+if not filtered_df.empty:
+    hist_data = filtered_df['median_day_of_year'].dropna()
+    fig.add_trace(
+        go.Histogram(x=hist_data, name='Day of Year', nbinsx=30),
+        row=2, col=1
+    )
+
+# Top states by observations
+if not state_df.empty:
+    top_states = state_df.groupby('state')['observation_count'].sum().sort_values(ascending=False).head(10).reset_index()
+    fig.add_trace(
+        go.Bar(x=top_states['state'], y=top_states['observation_count'], name='Top States'),
+        row=2, col=2
+    )
+
+# Update layout
+fig.update_layout(
+    height=600,
+    showlegend=False,
+    title_text="Phenology Time Series Trends",
+    template="plotly_white"
+)
+
+# Compute trends
+trend_results = get_filtered_trend_results(filtered_df, min_observations, use_weighted_trends)
+
+# Add trend analysis section
+if not trend_results.empty:
+    st.header("📈 Trend Analysis")
+    
+    # Display trend metrics in a table
+    col1, col2, col3, col4 = st.columns(4)
+    
+    avg_slope = trend_results['slope_days_per_decade'].mean()
+    st.metric("Average Trend (days/decade)", f"{avg_slope:.2f}")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    positive_trends = (trend_results['slope_days_per_decade'] > 0).sum()
+    negative_trends = (trend_results['slope_days_per_decade'] < 0).sum()
+    stable_trends = (trend_results['slope_days_per_decade'] == 0).sum()
+    
+    col1.metric("Positive Trends", positive_trends)
+    col2.metric("Negative Trends", negative_trends)
+    col3.metric("No Change", stable_trends)
+    col4.metric("Total Species Trends", len(trend_results))
+    
+    # Trend visualization
+    st.subheader("Trend Visualization")
+    
+    # Create a chart showing slope by species 
+    trend_viz_df = trend_results.sort_values('slope_days_per_decade', key=abs, ascending=False).head(20)
+    
+    if not trend_viz_df.empty:
+        fig_trend = go.Figure()
+        fig_trend.add_trace(go.Bar(
+            x=trend_viz_df['slope_days_per_decade'],
+            y=trend_viz_df['common_name'].str.cat(trend_viz_df['phenophase_description'], sep=' - '),
+            orientation='h',
+            text=[f"{s:.2f} days/decade" for s in trend_viz_df['slope_days_per_decade']],
+            textposition='auto'
+        ))
+        
+        fig_trend.update_layout(
+            title="Top 20 Species by Trend Magnitude",
+            xaxis_title="Trend (days per decade)",
+            yaxis_title="Species - Phenophase",
+            height=500
+        )
+        
+        st.plotly_chart(fig_trend, use_container_width=True)
+        
+        # Add interpretation of trends 
+        st.subheader("Trend Interpretation")
+        st.markdown("""
+        ### Trend Interpretation Guide:
+        - **Positive Slopes**: Earlier phenology (earlier than historical patterns)
+        - **Negative Slopes**: Later phenology (later than historical patterns)  
+        - **Magnitude**: The rate of change in days per decade
+        - **R² Values**: How well the trend line fits the data (0-1 scale)
+        """)
+        
+        # Show detailed trend results
+        st.subheader("Detailed Trend Results")
+        st.dataframe(trend_results[['common_name', 'phenophase_description', 'slope_days_per_decade', 'r_squared', 'years_used']].round(3))
+        
+        # Add download button for trend results
+        trend_csv = trend_results.to_csv(index=False)
+        st.download_button(
+            label="Download Trend Results as CSV",
+            data=trend_csv,
+            file_name="phenology_trend_analysis.csv",
+            mime="text/csv"
+        )
+    else:
+        st.info("Not enough data to compute meaningful trends for the selected filters.")
+else:
+    st.info("No data available for trend analysis with the current filters.")
+
+# Update axis labels
+fig.update_xaxes(title_text="Year", row=1, col=1)
+fig.update_yaxes(title_text="Median Day of Year", row=1, col=1)
+fig.update_xaxes(title_text="Year", row=1, col=2)
+fig.update_yaxes(title_text="Observation Count", row=1, col=2)
+fig.update_xaxes(title_text="Day of Year", row=2, col=1)
+fig.update_yaxes(title_text="Frequency", row=2, col=1)
+fig.update_xaxes(title_text="State", row=2, col=2)
+fig.update_yaxes(title_text="Observation Count", row=2, col=2)
+
+# Display the main chart
+st.plotly_chart(fig, use_container_width=True)
+
+# Top Species by Observations
+st.header("🏆 Top Species by Observations")
+if not filtered_df.empty:
+    top_species = filtered_df.groupby(['species_id', 'common_name'])['observation_count'].sum().sort_values(ascending=False).head(10).reset_index()
+    
+    # Create bar chart
+    fig_top_species = px.bar(top_species, x='observation_count', y='common_name', 
+                           title='Top 10 Species by Observation Count',
+                           orientation='h')
+    
+    st.plotly_chart(fig_top_species, use_container_width=True)
+else:
+    st.info("No data available for top species visualization")
+
+# Data table
+st.header("📋 Data Table")
+if not filtered_df.empty:
+    # Select only key columns for display
+    display_columns = ['species_id', 'common_name', 'phenophase_description', 'state', 'year', 
+                       'observation_count', 'median_day_of_year', 'mean_day_of_year']
+    
+    # Show filtered data table
+    st.dataframe(filtered_df[display_columns].reset_index(drop=True), height=400)
+    
+    # Download buttons
+    st.subheader("Download Filtered Data")
+    csv = filtered_df[display_columns].to_csv(index=False).encode('utf-8')
+    st.download_button(
+        label="Download CSV",
+        data=csv,
+        file_name='filtered_phenology_data.csv',
+        mime='text/csv'
+    )
+    
+    # Download button for full dataset
+    if not species_phenophase_df.empty:
+        full_csv = species_phenophase_df[display_columns].to_csv(index=False).encode('utf-8')
+        st.download_button(
+            label="Download Full Dataset",
+            data=full_csv,
+            file_name='full_phenology_dataset.csv',
+            mime='text/csv'
+        )
+else:
+    st.info("No data available for display - please adjust your filters")
+
+st.markdown("---")
+st.markdown("**Data Source**: Annual phenology summary from `/outputs/phenology-intelligence-v1/annual_summaries/`")
+
+# Footer
+st.markdown("---")
+st.markdown("Created with Streamlit | Phenology Intelligence Project")
