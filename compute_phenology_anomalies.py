@@ -15,7 +15,7 @@ from pathlib import Path
 print("Starting phenology anomaly computation...")
 
 # Initialize output directory for anomaly results
-output_dir = "./anomaly_outputs"
+output_dir = "/workspace/phenology-intelligence-v1/anomaly_outputs"
 os.makedirs(output_dir, exist_ok=True)
 
 def compute_mad(data):
@@ -55,7 +55,7 @@ def main():
     print("Loading input datasets...")
     
     # Load baseline data
-    baseline_path = "/workspace/phenology-intelligence-v1/coverage_aware_baseline/ecological_baseline.csv"
+    baseline_path = "/workspace/phenology-intelligence-v1/coverage_aware_baseline_full/coverage_aware_baseline_full.csv"
     baseline_df = pd.read_csv(baseline_path)
     
     # Create simulated annual summary data for demonstration

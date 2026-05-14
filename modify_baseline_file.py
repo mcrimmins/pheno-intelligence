@@ -6,7 +6,7 @@ import os
 
 def modify_baseline_file():
     # Load existing baseline
-    baseline_file = "./coverage_aware_baseline/ecological_baseline.csv"
+    baseline_file = "./coverage_aware_baseline_full/coverage_aware_baseline_full.csv"
     baseline_df = pd.read_csv(baseline_file)
     
     print(f"Original baseline has {len(baseline_df)} records")
