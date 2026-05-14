@@ -1,0 +1,34 @@
+=== BASELINE VALIDATION SUMMARY ===
+Generated on: 2026-05-13 21:19:26
+
+=== BASIC STATISTICS ===
+Total groups processed: 511394
+Total rows processed: 522584
+Groups excluded for insufficient data: 0
+Processing time: 631.43 seconds
+
+=== RELIABILITY TIER DISTRIBUTION ===
+high: 0 (0.0%)
+medium: 0 (0.0%)
+low: 0 (0.0%)
+insufficient: 511394 (100.0%)
+
+=== GROUP SIZE DISTRIBUTION ===
+Largest group: 3 observations
+Smallest group: 1 observations
+
+=== OBSERVATION DENSITY DISTRIBUTION ===
+Average observation density: 76.79
+Median observation density: 15.00
+Standard deviation: 223.27
+Min: 1.00
+Max: 6617.00
+
+=== BASELINE CONFIDENCE SCORE DISTRIBUTION ===
+Average confidence score: 0.494
+Median confidence score: 0.457
+Min: 0.325
+Max: 0.680
+
+=== MEMORY USAGE ===
+Memory usage: 196.44 MB
